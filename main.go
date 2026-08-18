@@ -26,6 +26,7 @@ import (
 	"main/utils/lyrics"
 	"main/utils/runv2"
 	"main/utils/runv3"
+	"main/utils/runv4"
 	"main/utils/structs"
 	"main/utils/task"
 
@@ -1030,12 +1031,25 @@ func ripTrack(track *task.Track, token string, mediaUserToken string) {
 			return
 		}
 		//边下载边解密
-		err = runv2.Run(track.ID, trackM3u8Url, trackPath, Config)
-		if err != nil {
-			fmt.Println("Failed to run v2:", err)
-			counter.Error++
-			return
+		if Config.TemplateDecrypt {
+			//模板解密
+			err = runv4.Run(track.ID, trackM3u8Url, trackPath, Config)
+			if err != nil {
+				fmt.Println("Failed to run v4:", err)
+				counter.Error++
+				return
+			}
+
+		} else {
+			//传统解密
+			err = runv2.Run(track.ID, trackM3u8Url, trackPath, Config)
+			if err != nil {
+				fmt.Println("Failed to run v2:", err)
+				counter.Error++
+				return
+			}
 		}
+
 	}
 	//这里利用MP4box将fmp4转化为mp4，并添加ilst box与cover，方便后面的mp4tag添加更多自定义标签
 	tags := []string{
