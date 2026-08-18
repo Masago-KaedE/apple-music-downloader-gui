@@ -2584,25 +2584,26 @@ func extractMedia(b string, more_mode bool) (string, string, error) {
 		fmt.Printf("Dolby Audio     : %s\n", formatAvailability(hasDolbyAudio, dolbyAudioQuality))
 		fmt.Println("------------------------")
 
+		fmt.Printf("%+v\n", Config)
+		fmt.Println("===== SELECTOR =====")
+		for _, variant := range master.Variants {
+			fmt.Printf("Codec=%q Audio=%q AvgBW=%d BW=%d\n",
+				variant.Codecs,
+				variant.Audio,
+				variant.AverageBandwidth,
+				variant.Bandwidth,
+			)
+		}
+		fmt.Printf("dl_atmos=%v dl_aac=%v AlacMax=%d\n",
+			dl_atmos,
+			dl_aac,
+			Config.AlacMax,
+		)
+		fmt.Println("====================")
+
 		return "", "", nil
 	}
 	var Quality string
-	fmt.Printf("%+v\n", Config)
-	fmt.Println("===== SELECTOR =====")
-	for _, variant := range master.Variants {
-		fmt.Printf("Codec=%q Audio=%q AvgBW=%d BW=%d\n",
-			variant.Codecs,
-			variant.Audio,
-			variant.AverageBandwidth,
-			variant.Bandwidth,
-		)
-	}
-	fmt.Printf("dl_atmos=%v dl_aac=%v AlacMax=%d\n",
-		dl_atmos,
-		dl_aac,
-		Config.AlacMax,
-	)
-	fmt.Println("====================")
 	for _, variant := range master.Variants {
 		if dl_atmos {
 			if variant.Codecs == "ec-3" && strings.Contains(variant.Audio, "atmos") {
