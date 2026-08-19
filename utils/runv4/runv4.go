@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"time"
+	"sync"
+	"golang.org/x/sync/errgroup"
 
 	"main/utils/structs"
 
@@ -27,6 +29,20 @@ type TimedResponseBody struct {
 	threshold int
 	body      io.Reader
 }
+type decryptJob struct {
+	Seq       int           // 分片序号，用于重组
+	Frag      *mp4.Fragment // 原始分片
+	Tmpl      *template     // 密钥模板
+	RawOffset int64
+}
+
+// 定义输出结果
+type decryptResult struct {
+	Seq       int
+	Frag      *mp4.Fragment
+	RawOffset int64
+}
+
 
 func (b *TimedResponseBody) Read(p []byte) (int, error) {
 	n, err := b.body.Read(p)
@@ -198,7 +214,7 @@ func downloadAndDecryptFile(keyServer string, in io.Reader, outfile string,
 	// 'segment' in m3u8 == 'fragment' in mp4ff
 	//fmt.Println("Starting decryption...")
 	bar := progressbar.NewOptions64(totalLen,
-		progressbar.OptionClearOnFinish(),
+		//progressbar.OptionClearOnFinish(),
 		progressbar.OptionSetElapsedTime(false),
 		progressbar.OptionSetPredictTime(false),
 		progressbar.OptionShowElapsedTimeOnFinish(),
@@ -215,54 +231,160 @@ func downloadAndDecryptFile(keyServer string, in io.Reader, outfile string,
 		}),
 	)
 	bar.Add64(int64(offset))
-	//rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
-	var tmpl *template
-	for i := 0; ; i++ {
-		var frag *mp4.Fragment
-		rawoffset := offset
-		frag, offset, err = ReadNextFragment(inBuf, offset)
-		rawoffset = offset - rawoffset
-		if err != nil {
-			return err
-		}
-		if frag == nil {
-			// check offset against Content-Length?
-			break
-		}
-		// print progress
 
-		// if totalLen > 0 {
-		// 	fmt.Printf("%.2f%% of %d bytes\n", 100*float32(offset)/float32(totalLen), totalLen)
-		// }
-		segment := playlistSegments[i]
-		if segment == nil {
-			return errors.New("segment number out of sync")
-		}
-		key := segment.Key
-		if key != nil && (i < 2) {
-			if key.URI == prefetchKey {
-				tmpl, err = fetchTemplate(keyServer, "0", prefetchKey)
-				if err != nil {
-					return err
+	// 1. 引入 errgroup 和 context，实现任意错误瞬间熔断全局
+	eg, ctx := errgroup.WithContext(context.Background())
+
+	// 通道设计：任务分发通道 与 结果汇总通道
+	// 缓冲区大小决定了最大可“乱序”的跨度，防止读取过快撑爆内存
+	jobs := make(chan *decryptJob, 10)
+	results := make(chan *decryptResult, 10)
+
+	// 2. 启动 Writer (按序重组并写入)
+	eg.Go(func() error {
+		// 乱序重组缓冲区 (Reassembly Buffer)
+		buffer := make(map[int]*decryptResult)
+		expectedSeq := 0 // 期待写入的下一个序号
+
+		for {
+			select {
+			case <-ctx.Done(): // 收到取消信号，立即退出
+				return ctx.Err()
+			case res, ok := <-results:
+				if !ok {
+					// results 通道已关闭，说明所有解密完成，且全部写入完毕
+					return nil
 				}
-			} else {
-				tmpl, err = fetchTemplate(keyServer, adamId, key.URI)
+				
+				// 将乱序到达的结果放入缓冲区
+				buffer[res.Seq] = res
+
+				// 检查当前期望的序号是否已经准备好，准备好就一直往前推进
+				for {
+					if readyRes, exists := buffer[expectedSeq]; exists {
+						// 编码写入
+						if err := readyRes.Frag.Encode(outBuf); err != nil {
+							return fmt.Errorf("encode fragment seq %d failed: %w", expectedSeq, err)
+						}
+						bar.Add64(readyRes.RawOffset)
+						
+						// 清理内存并期待下一个
+						delete(buffer, expectedSeq)
+						expectedSeq++
+					} else {
+						// 还没轮到，跳出等待
+						break
+					}
+				}
+			}
+		}
+	})
+
+	// 3. 启动固定 10 个解密 Worker (乱序执行)
+	var workerWg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		workerWg.Add(1)
+		eg.Go(func() error {
+			defer workerWg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case job, ok := <-jobs:
+					if !ok {
+						return nil // 任务分发完毕，Worker 下班
+					}
+					// 核心解密逻辑
+					if err := DecryptFragment(job.Frag, tracks, job.Tmpl); err != nil {
+						return fmt.Errorf("decryptFragment seq %d: %w", job.Seq, err)
+					}
+					
+					// 提交解密结果
+					select {
+					case results <- &decryptResult{
+						Seq:       job.Seq,
+						Frag:      job.Frag,
+						RawOffset: job.RawOffset,
+					}:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+			}
+		})
+	}
+
+	// 监控所有 Worker 是否完成，完成后关闭 results 通道
+	eg.Go(func() error {
+		workerWg.Wait() // 等待10个工人都下班
+		close(results)  // 通知 Writer 可以收尾了
+		return nil
+	})
+
+	// 4. 启动 Reader (主线程负责读取)
+	eg.Go(func() error {
+		defer close(jobs) // 读取完毕，关闭任务通道
+		seq := 0
+		var tmpl *template
+
+		for i := 0; ; i++ {
+			// 检查是否发生了全局错误，如果有则放弃读取
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			var frag *mp4.Fragment
+			rawoffset := offset
+			frag, offset, err = ReadNextFragment(inBuf, offset)
+			rawoffset = offset - rawoffset
+			if err != nil {
+				return fmt.Errorf("read fragment: %w", err)
+			}
+			if frag == nil {
+				break // 读到文件末尾
+			}
+
+			segment := playlistSegments[i]
+			if segment == nil {
+				return errors.New("segment number out of sync")
+			}
+			
+			key := segment.Key
+			if key != nil && (i < 2) {
+				if key.URI == prefetchKey {
+					tmpl, err = fetchTemplate(keyServer, "0", prefetchKey)
+				} else {
+					tmpl, err = fetchTemplate(keyServer, adamId, key.URI)
+				}
 				if err != nil {
 					return err
 				}
 			}
+
+			// 将任务发送给 Workers
+			job := &decryptJob{
+				Seq:       seq,
+				Frag:      frag,
+				Tmpl:      tmpl,
+				RawOffset: int64(rawoffset),
+			}
+
+			select {
+			case jobs <- job:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			seq++
 		}
-		// flushes the buffer
-		err = DecryptFragment(frag, tracks, tmpl)
-		if err != nil {
-			return fmt.Errorf("decryptFragment: %w", err)
-		}
-		err = frag.Encode(outBuf)
-		if err != nil {
-			return err
-		}
-		bar.Add64(int64(rawoffset))
+		return nil
+	})
+
+	// 5. 阻塞等待：这行代码会等待 Reader、Workers、Writer 彻底完成，或者捕获第一个发生的错误
+	if err := eg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		return err
 	}
+
+	// ... (后续的 Flush 和 Buffer 写盘操作保持不变) ...
 	err = outBuf.Flush()
 	if err != nil {
 		return err
@@ -282,7 +404,6 @@ func downloadAndDecryptFile(keyServer string, in io.Reader, outfile string,
 	}
 	return nil
 }
-
 // Remove boxes in the init segment that are known to cause compatibility issues
 func sanitizeInit(init *mp4.InitSegment) error {
 	traks := init.Moov.Traks
