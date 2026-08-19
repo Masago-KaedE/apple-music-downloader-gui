@@ -214,7 +214,7 @@ func downloadAndDecryptFile(keyServer string, in io.Reader, outfile string,
 	// 'segment' in m3u8 == 'fragment' in mp4ff
 	//fmt.Println("Starting decryption...")
 	bar := progressbar.NewOptions64(totalLen,
-		//progressbar.OptionClearOnFinish(),
+		progressbar.OptionClearOnFinish(),
 		progressbar.OptionSetElapsedTime(false),
 		progressbar.OptionSetPredictTime(false),
 		progressbar.OptionShowElapsedTimeOnFinish(),
@@ -352,7 +352,8 @@ func downloadAndDecryptFile(keyServer string, in io.Reader, outfile string,
 			key := segment.Key
 			if key != nil && (i < 2) {
 				if key.URI == prefetchKey {
-					tmpl, err = fetchTemplate(keyServer, "0", prefetchKey)
+					tmpl = prefetchTemplate()
+					//tmpl, err = fetchTemplate(keyServer, "0", prefetchKey)
 				} else {
 					tmpl, err = fetchTemplate(keyServer, adamId, key.URI)
 				}
