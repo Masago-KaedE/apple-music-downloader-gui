@@ -55,7 +55,86 @@ func (b *TimedResponseBody) Read(p []byte) (int, error) {
 	}
 	return n, err
 }
+const (
+	downloadMaxAttempts = 5                 // 最多尝试次数
+	downloadIdleTimeout = 30 * time.Second  // 30 秒没收到任何字节就认为卡死
+)
 
+// downloadWithResume 下载完整文件到内存，支持断点续传、空闲超时和重试。
+// 只有拿到 totalLen 字节才返回成功。
+func downloadWithResume(ctx context.Context, client *http.Client, fileUrl string,
+	header http.Header, totalLen int64, bar *progressbar.ProgressBar) (*bytes.Buffer, error) {
+
+	buf := &bytes.Buffer{}
+	var offset int64
+	backoff := 2 * time.Second
+
+	for attempt := 1; attempt <= downloadMaxAttempts; attempt++ {
+		if attempt > 1 {
+			fmt.Printf("Download interrupted at %d/%d bytes, retrying in %v\n", offset, totalLen, backoff)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
+		}
+
+		// 每次尝试用独立的子 context，卡死时只取消本次连接
+		attemptCtx, attemptCancel := context.WithCancel(ctx)
+		req, err := http.NewRequestWithContext(attemptCtx, "GET", fileUrl, nil)
+		if err != nil {
+			attemptCancel()
+			return nil, err
+		}
+		req.Header = header
+		if offset > 0 {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset)) // 断点续传
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			attemptCancel()
+			continue
+		}
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+			resp.Body.Close()
+			attemptCancel()
+			return nil, fmt.Errorf("download failed: server returned %s", resp.Status)
+		}
+		if offset > 0 && resp.StatusCode != http.StatusPartialContent {
+			resp.Body.Close()
+			attemptCancel()
+			return nil, errors.New("server does not support Range requests, cannot resume")
+		}
+
+		// 空闲超时检测：没有新数据到达就取消本次请求，触发重试
+		timer := time.AfterFunc(downloadIdleTimeout, attemptCancel)
+		body := &TimedResponseBody{
+			timeout:   downloadIdleTimeout,
+			timer:     timer,
+			threshold: 1, // 只要读到字节就重置计时器
+			body:      resp.Body,
+		}
+
+		n, copyErr := io.Copy(io.MultiWriter(buf, bar), body)
+		resp.Body.Close()
+		timer.Stop()
+		attemptCancel()
+		offset += n
+
+		if copyErr == nil && offset == totalLen {
+			return buf, nil // 完整拿到，才算下载成功
+		}
+		if copyErr == nil {
+			copyErr = fmt.Errorf("short download: got %d of %d bytes", offset, totalLen)
+		}
+	}
+	return nil, fmt.Errorf("download failed after %d attempts (got %d/%d bytes)",
+		downloadMaxAttempts, offset, totalLen)
+}
 
 func Run(adamId string, playlistUrl string, outfile string, Config structs.ConfigSet) error {
 	var err error
@@ -132,7 +211,6 @@ func Run(adamId string, playlistUrl string, outfile string, Config structs.Confi
 		}
 		defer do.Body.Close()
 		if do.ContentLength < int64(Config.MaxMemoryLimit * 1024 * 1024) {
-			var buffer bytes.Buffer
 			bar := progressbar.NewOptions64(
 				do.ContentLength,
 				progressbar.OptionClearOnFinish(),
@@ -151,8 +229,12 @@ func Run(adamId string, playlistUrl string, outfile string, Config structs.Confi
 					BarEnd:        "",
 				}),
 			)
-			io.Copy(io.MultiWriter(&buffer, bar), do.Body)
-			body = &buffer
+			buffer, err := downloadWithResume(ctx, client, fileUrl.String(), header, do.ContentLength, bar)
+			if err != nil {
+				return err // 下载没完成就失败退出，绝不进入解密
+			}
+			
+			body = buffer
 			fmt.Print("Downloaded\n")
 		} else {
 			body = do.Body
