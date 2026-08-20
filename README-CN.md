@@ -19,6 +19,16 @@
 
 ---
 
+## 🚀 特别更新
+### 本地模板解密
+在配置文件中将 `template-decrypt` 设置为 `true`，即可启用 WorldObservationLog 的最新解密技术。此功能需要配合最新版本的 Wrapper 使用。
+
+工具会通过 `40020` 端口向 Wrapper 请求解密参数，然后在本地对下载的文件进行解密。
+在之前的旧版实现中，加密文件需要通过 `10020` 端口发送到 Wrapper，由 Wrapper 完成解密后再传回工具。新版无需在进程之间传输整个文件，使用更加方便，解密速度也更快。
+```yaml
+template-decrypt: true
+```
+
 ## ✨ 功能特性
 
 1. **内嵌封面和 LRC 歌词** - 需要 `media-user-token`（见下方说明）

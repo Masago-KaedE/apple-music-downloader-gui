@@ -70,36 +70,50 @@ type AddedTrack struct {
 }
 
 func loadConfig() error {
-	data, err := os.ReadFile("config.yaml")
+	const (
+		configPath  = "config.yaml"
+		examplePath = "config.yaml.example"
+	)
+
+	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read %s: %w", configPath, err)
+		}
+
+		// Create config.yaml from config.yaml.example.
+		data, err = os.ReadFile(examplePath)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", examplePath, err)
+		}
+
+		if err := os.WriteFile(configPath, data, 0o600); err != nil {
+			return fmt.Errorf("create %s: %w", configPath, err)
+		}
+
+		fmt.Printf("%s not found; created it from %s\n", configPath, examplePath)
 	}
-	err = yaml.Unmarshal(data, &Config)
-	if err != nil {
-		return err
+
+	if err := yaml.Unmarshal(data, &Config); err != nil {
+		return fmt.Errorf("parse %s: %w", configPath, err)
 	}
-	err = yaml.Unmarshal(data, &Config)
-	if err != nil {
-		return err
-	}
+
 	if len(Config.Storefront) != 2 {
 		Config.Storefront = "us"
 	}
 	if Config.AlacMax == 0 {
 		Config.AlacMax = 192000
 	}
-
 	if Config.AtmosMax == 0 {
 		Config.AtmosMax = 2768
 	}
-
 	if Config.AacType == "" {
 		Config.AacType = "aac-lc"
 	}
-
 	if Config.MVAudioType == "" {
 		Config.MVAudioType = "atmos"
 	}
+
 	return nil
 }
 

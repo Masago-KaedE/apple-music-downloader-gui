@@ -11,12 +11,24 @@
 **Must be installed first:**
 
 - **[MP4Box](https://gpac.io/downloads/gpac-nightly-builds/)** - Ensure it's correctly added to your environment variables
-- **[wrapper](https://github.com/WorldObservationLog/wrapper)** - Decryption program must be running before use
+- **[wrapper](https://github.com/WorldObservationLog/wrapper)** - Decryption program must be running before use  [Wrapper Setup](./Wrapper-SETUP.md)
 
 **Optional (for MV download):**
 
 - **[mp4decrypt](https://www.bento4.com/downloads/)**
 
+---
+
+## 🚀 Special Update
+### Local Template Decryption
+Set `template-decrypt` to `true` in the configuration file to enable WorldObservationLog's latest decryption method. This feature requires the latest version of Wrapper.
+
+The tool requests decryption parameters from Wrapper through port `40020` and decrypts the downloaded file locally.
+Previously, encrypted files were sent to Wrapper through port `10020`, decrypted by Wrapper, and then transferred back to the tool. The new method eliminates the need to transfer the entire file between processes, making decryption more convenient and significantly faster.
+
+```yaml
+template-decrypt: true
+```
 ---
 
 ## ✨ Features
