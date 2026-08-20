@@ -1,6 +1,4 @@
-# 🌐 Cloud Server Proxy Setup
-
-> **Fixes:** `Failed to get song response.` · `503 Service Unavailable` · `failed to get lyrics`
+# Wrapper Setup Guide / Wrapper 配置教程
 
 [English](#english) | [简体中文](#简体中文)
 
@@ -10,130 +8,157 @@
 
 ## English
 
-Cloud hosting providers (like **DigitalOcean**, **AWS**, **Hetzner**, **Vultr**, etc.) often have their IP ranges **blocked by Apple Music's API** (`amp-api.music.apple.com`). This causes the following errors on the server even though everything works fine locally:
+This guide explains how to download, extract, configure, and run Wrapper on Linux.
 
-```
-Failed to get song response.
-Failed to rip song: 503 Service Unavailable
-failed to get lyrics
-```
+> Wrapper requires account credentials. Only run it on a trusted computer and network. Do not share your password, 2FA verification code, token, or cached account information.
 
-To fix this, you can route all Apple API HTTP requests through a local proxy. This **does not touch your server's main IP address or break SSH in any way**.
+### 1. Install the Required Tools
 
----
-
-### 1. Config Option
-
-In your `config.yaml`, set the `proxy` field:
-
-```yaml
-# SOCKS5 or HTTP proxy URL.
-# Leave empty "" for direct connection (local PC / no proxy needed).
-# For cloud servers blocked by Apple, use one of the options below.
-proxy: "socks5://127.0.0.1:1080"
-```
-
----
-
-### 2. Option A — Cloudflare WARP (Recommended)
-
-Cloudflare WARP in **proxy mode** runs a local SOCKS5 proxy on port `1080`. It does **not** replace your server's system IP or route all traffic — only the Go process's HTTP calls go through it.
-
-#### Step 1: Install Cloudflare WARP
+Debian or Ubuntu:
 
 ```bash
-# Add Cloudflare GPG key and repository
-curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-
-echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-
-# Update and install
-sudo apt update && sudo apt install cloudflare-warp -y
+sudo apt update && sudo apt install -y curl unzip
 ```
 
-#### Step 2: Configure WARP in Proxy Mode
+Fedora:
 
 ```bash
-# Register a new WARP account
-warp-cli registration new
-
-# CRITICAL: Set to proxy mode (prevents SSH disconnects / IP changes)
-warp-cli mode proxy
-
-# Set the local SOCKS5 proxy port
-warp-cli proxy port 1080
-
-# Connect
-warp-cli connect
+sudo dnf install -y curl unzip
 ```
 
-#### Step 3: Enable Auto-Start on Boot
+Arch Linux:
 
 ```bash
-sudo systemctl enable warp-svc
+sudo pacman -S --needed curl unzip
 ```
 
-#### Step 4: Update config.yaml
+### 2. Download Wrapper
 
-```yaml
-proxy: "socks5://127.0.0.1:1080"
-```
-
-#### Verify It Works
+The following command downloads the latest Linux x86_64 release:
 
 ```bash
-# Your server's real IP (unchanged)
-curl https://api.ipify.org
-
-# Traffic through WARP (Cloudflare proxy IP)
-curl --socks5 127.0.0.1:1080 https://www.cloudflare.com/cdn-cgi/trace
+curl -fL "https://github.com/WorldObservationLog/wrapper/releases/download/wrapper.x86_64.latest/Wrapper.x86_64.latest.zip" -o Wrapper.x86_64.latest.zip
 ```
 
-> If the second command shows `warp=on`, the proxy is working correctly.
+### 3. Extract Wrapper
 
----
-
-### 3. Option B — SSH Reverse Tunnel (Zero Cost, No Install)
-
-If you don't want to install anything on the server, you can forward your **local machine's internet connection** to the server via an SSH tunnel.
-
-#### On your LOCAL machine (Windows / macOS / Linux):
+Create a `wrapper` directory, extract the archive into it, and enter the directory:
 
 ```bash
-ssh -R 1080 -N user@YOUR_SERVER_IP
+mkdir -p wrapper
+unzip Wrapper.x86_64.latest.zip -d wrapper
+cd wrapper
 ```
 
-Keep this terminal open while downloading. This opens a SOCKS5 proxy on `127.0.0.1:1080` **on the server**, tunnelled through your local internet connection.
+Give the executable permission to run:
 
-#### On the server, set config.yaml:
-
-```yaml
-proxy: "socks5://127.0.0.1:1080"
+```bash
+chmod +x wrapper
 ```
 
-> ✅ SSH itself is **never** affected. This tunnel only makes port 1080 available locally on the server.
+> Linux file names are case-sensitive. If the executable has a different name, use its exact name in the commands.
 
----
+### 4. Log In and Run Wrapper
 
-### 4. Local PC (Windows / macOS) — No Proxy Needed
+Run Wrapper with your username and password:
 
-If you're running the tool on your own computer, Apple's API is usually accessible directly. Leave the proxy setting empty:
-
-```yaml
-proxy: ""
+```bash
+./wrapper -L 'username:password'
 ```
 
----
+Replace `username` and `password` with your actual account credentials.
 
-### 5. Troubleshooting
+Example:
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `503 Service Unavailable` | Server IP blocked by Apple | Set proxy in `config.yaml` |
-| `failed to get lyrics` | `amp-api.music.apple.com` blocked | Set proxy in `config.yaml` |
-| `proxy config error: ...` | Invalid proxy URL format | Check URL format: `socks5://host:port` |
-| ALAC/Atmos works but lyrics/AAC fail | Only API calls blocked, not CDN | Normal — proxy fixes API calls |
-| SSH disconnected after WARP install | WARP set to VPN mode instead of proxy mode | Run `warp-cli mode proxy` again |
+```bash
+./wrapper -L 'user@example.com:your_password'
+```
+
+Keep the login value inside single quotes so that most special characters are not interpreted by the shell.
+
+> The command may be stored in your shell history. Avoid running it on a shared or untrusted computer.
+
+If two-factor authentication is enabled, Wrapper may ask you to enter a 2FA verification code. Enter the code from your trusted device when prompted.
+
+### 5. Confirm That Wrapper Is Running
+
+Wrapper is running normally when the terminal displays output similar to:
+
+```text
+[+] account info cached successfully
+[+] StoreFront ID: 143465-2,31
+[+] Music-Token: AtYyithbLKwQAX...
+[!] listening m3u8 request on 127.0.0.1:20020
+[!] listening 127.0.0.1:10020
+[!] listening account info request on 127.0.0.1:30020
+[!] listening key request on 127.0.0.1:40020
+```
+
+Keep the terminal open while using Wrapper. Closing the terminal or terminating the process will stop all Wrapper services.
+
+By default, Wrapper listens on `127.0.0.1`, so its services are only accessible from the local computer.
+
+### Usage
+
+```text
+Usage: wrapper [OPTION]...
+
+  -h, --help              Print help and exit
+  -V, --version           Print version and exit
+  -H, --host=STRING         (default=`127.0.0.1')
+  -D, --decrypt-port=INT    (default=`10020')
+  -M, --m3u8-port=INT       (default=`20020')
+  -A, --account-port=INT    (default=`30020')
+  -K, --key-port=INT        (default=`40020')
+  -P, --proxy=STRING        (default=`')
+  -L, --login=STRING        (username:password)
+  -F, --code-from-file      (default=off)
+```
+
+### Services
+
+Wrapper provides services on four TCP ports:
+
+| Port | Option | Protocol | Purpose |
+|------|--------|----------|---------|
+| 10020 | `-D` | Binary | Sample decryption: `[1B len][adamId][1B len][uri]`, followed by `[4B size][ciphertext]` to plaintext |
+| 20020 | `-M` | Binary | M3U8 stream URL: `[1B len][adamId digits]` to an M3U8 URL |
+| 30020 | `-A` | HTTP | Account information in JSON format |
+| 40020 | `-K` | HTTP | Key service: `?adamId=&uri=` to a decryption template |
+
+#### Port 40020 Key Service
+
+Request any track once to obtain the complete content decryption template:
+
+```bash
+curl "http://127.0.0.1:40020/?adamId=1720704575&uri=skd%3A%2F%2Fitunes.apple.com%2Fp683167092%2Fc6"
+```
+
+Example response:
+
+```json
+{
+  "adamId": "...",
+  "keyUri": "...",
+  "contentKey": "...",
+  "ctx": "<base64>",
+  "state": "<base64>",
+  "rcx": "0x..",
+  "rax": "0x..",
+  "rdx": "0x..",
+  "r9": "0x..",
+  "rbp": "0x.."
+}
+```
+
+The template is captured by a Dobby hook at the R1 entry (`libCoreLSKD+0x1d5709`) in debug builds.
+
+### Special Thanks
+
+- Anonymous, for providing the original version of this project and the legacy Frida decryption method.
+- chocomint, for providing support for the arm64 architecture.
+
+[Back to top](#wrapper-setup-guide--wrapper-配置教程)
 
 ---
 
@@ -141,127 +166,154 @@ proxy: ""
 
 ## 简体中文
 
-云服务器（如 **DigitalOcean**、**AWS**、**Hetzner**、**Vultr** 等）的 IP 段经常被 Apple Music API（`amp-api.music.apple.com`）屏蔽，导致在服务器上运行时出现以下错误（而本地电脑完全正常）：
+本教程介绍如何在 Linux 系统中下载、解压、配置并运行 Wrapper。
 
-```
-Failed to get song response.
-Failed to rip song: 503 Service Unavailable
-failed to get lyrics
-```
+> Wrapper 需要使用账号凭据。请仅在可信的计算机和网络环境中运行，不要向他人泄露密码、2FA 验证码、Token 或缓存的账号信息。
 
-解决方法是将所有 Apple API 请求通过本地代理转发。**这不会改变服务器主 IP 地址，也不会影响 SSH 连接。**
+### 1. 安装必要工具
 
----
-
-### 1. 配置选项
-
-在 `config.yaml` 中设置 `proxy` 字段：
-
-```yaml
-# SOCKS5 或 HTTP 代理地址。
-# 本地电脑无需代理，留空即可。
-# 云服务器被 Apple 屏蔽时，使用以下任一选项。
-proxy: "socks5://127.0.0.1:1080"
-```
-
----
-
-### 2. 方案 A — Cloudflare WARP（推荐）
-
-Cloudflare WARP 的**代理模式**会在本地启动一个 SOCKS5 代理（端口 `1080`）。它**不会**替换服务器系统 IP 或路由全局流量 —— 只有 Go 程序的 HTTP 请求会通过代理。
-
-#### 第一步：安装 Cloudflare WARP
+Debian 或 Ubuntu：
 
 ```bash
-# 添加 Cloudflare GPG 密钥和软件源
-curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-
-echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-
-# 更新并安装
-sudo apt update && sudo apt install cloudflare-warp -y
+sudo apt update && sudo apt install -y curl unzip
 ```
 
-#### 第二步：配置 WARP 代理模式
+Fedora：
 
 ```bash
-# 注册新的 WARP 账户
-warp-cli registration new
-
-# 关键：设置为代理模式（防止 SSH 断连 / IP 被替换）
-warp-cli mode proxy
-
-# 设置本地 SOCKS5 代理端口
-warp-cli proxy port 1080
-
-# 连接
-warp-cli connect
+sudo dnf install -y curl unzip
 ```
 
-#### 第三步：设置开机自启
+Arch Linux：
 
 ```bash
-sudo systemctl enable warp-svc
+sudo pacman -S --needed curl unzip
 ```
 
-#### 第四步：修改 config.yaml
+### 2. 下载 Wrapper
 
-```yaml
-proxy: "socks5://127.0.0.1:1080"
-```
-
-#### 验证是否正常工作
+运行以下命令下载最新的 Linux x86_64 版本：
 
 ```bash
-# 服务器真实 IP（保持不变）
-curl https://api.ipify.org
-
-# 通过 WARP 的流量（Cloudflare 代理 IP）
-curl --socks5 127.0.0.1:1080 https://www.cloudflare.com/cdn-cgi/trace
+curl -fL "https://github.com/WorldObservationLog/wrapper/releases/download/wrapper.x86_64.latest/Wrapper.x86_64.latest.zip" -o Wrapper.x86_64.latest.zip
 ```
 
-> 若第二条命令输出包含 `warp=on`，代理配置成功。
+### 3. 解压 Wrapper
 
----
-
-### 3. 方案 B — SSH 反向隧道（零成本，无需安装）
-
-如果不想在服务器上安装任何软件，可以通过 SSH 将本地电脑的网络连接转发到服务器。
-
-#### 在你的**本地电脑**上执行（Windows / macOS / Linux）：
+创建 `wrapper` 文件夹，将压缩包解压到该文件夹，然后进入文件夹：
 
 ```bash
-ssh -R 1080 -N user@YOUR_SERVER_IP
+mkdir -p wrapper
+unzip Wrapper.x86_64.latest.zip -d wrapper
+cd wrapper
 ```
 
-下载期间保持此终端开启。这会在**服务器的** `127.0.0.1:1080` 上开放一个 SOCKS5 代理，通过本地网络进行中转。
+为 Wrapper 添加可执行权限：
 
-#### 在服务器的 config.yaml 中设置：
-
-```yaml
-proxy: "socks5://127.0.0.1:1080"
+```bash
+chmod +x wrapper
 ```
 
-> ✅ SSH 连接**不受任何影响**。此隧道仅在服务器本地开放 1080 端口。
+> Linux 文件名区分大小写。如果解压后的程序名称不同，请在命令中使用它的实际名称。
 
----
+### 4. 登录并运行 Wrapper
 
-### 4. 本地电脑（Windows / macOS）— 无需代理
+使用账号和密码运行 Wrapper：
 
-如果在自己的电脑上运行，通常可以直接访问 Apple 接口，无需代理，留空即可：
-
-```yaml
-proxy: ""
+```bash
+./wrapper -L 'username:password'
 ```
 
----
+请将 `username` 和 `password` 替换为实际的账号和密码。
 
-### 5. 故障排查
+示例：
 
-| 错误 | 原因 | 解决方法 |
-|------|------|----------|
-| `503 Service Unavailable` | 服务器 IP 被 Apple 屏蔽 | 在 `config.yaml` 中配置代理 |
-| `failed to get lyrics` | `amp-api.music.apple.com` 被屏蔽 | 在 `config.yaml` 中配置代理 |
-| `proxy config error: ...` | 代理 URL 格式错误 | 检查格式：`socks5://host:port` |
-| ALAC/Atmos 正常但歌词/AAC 失败 | 仅 API 接口被屏蔽，CDN 正常 | 正常现象，配置代理后修复 |
-| 安装 WARP 后 SSH 断连 | WARP 设置为 VPN 模式而非代理模式 | 重新运行 `warp-cli mode proxy` |
+```bash
+./wrapper -L 'user@example.com:your_password'
+```
+
+建议使用单引号包裹登录信息，避免大多数特殊字符被 Shell 解析。
+
+> 该命令可能会被保存在 Shell 历史记录中。请勿在共享或不可信的计算机上运行。
+
+如果账号启用了双重认证，Wrapper 可能会要求输入 2FA 验证码。出现提示时，请输入可信设备上显示的验证码。
+
+### 5. 确认 Wrapper 正常运行
+
+当终端显示类似以下内容时，表示 Wrapper 已正常运行：
+
+```text
+[+] account info cached successfully
+[+] StoreFront ID: 143465-2,31
+[+] Music-Token: AtYyithbLKwQAX...
+[!] listening m3u8 request on 127.0.0.1:20020
+[!] listening 127.0.0.1:10020
+[!] listening account info request on 127.0.0.1:30020
+[!] listening key request on 127.0.0.1:40020
+```
+
+使用 Wrapper 时请保持终端窗口运行。关闭终端或结束 Wrapper 进程后，所有 Wrapper 服务都会停止。
+
+Wrapper 默认监听 `127.0.0.1`，因此这些服务只能从本机访问。
+
+### 命令行选项
+
+```text
+Usage: wrapper [OPTION]...
+
+  -h, --help              Print help and exit
+  -V, --version           Print version and exit
+  -H, --host=STRING         (default=`127.0.0.1')
+  -D, --decrypt-port=INT    (default=`10020')
+  -M, --m3u8-port=INT       (default=`20020')
+  -A, --account-port=INT    (default=`30020')
+  -K, --key-port=INT        (default=`40020')
+  -P, --proxy=STRING        (default=`')
+  -L, --login=STRING        (username:password)
+  -F, --code-from-file      (default=off)
+```
+
+### 服务端口
+
+Wrapper 通过四个 TCP 端口提供服务：
+
+| 端口 | 选项 | 协议 | 用途 |
+|------|------|------|------|
+| 10020 | `-D` | Binary | 样本解密：`[1B len][adamId][1B len][uri]`，然后通过 `[4B size][ciphertext]` 输出明文 |
+| 20020 | `-M` | Binary | M3U8 流地址：通过 `[1B len][adamId digits]` 获取 M3U8 URL |
+| 30020 | `-A` | HTTP | 获取 JSON 格式的账号信息 |
+| 40020 | `-K` | HTTP | 密钥服务：通过 `?adamId=&uri=` 获取解密模板 |
+
+#### 40020 密钥服务
+
+请求任意曲目一次，即可获取完整的内容解密模板：
+
+```bash
+curl "http://127.0.0.1:40020/?adamId=1720704575&uri=skd%3A%2F%2Fitunes.apple.com%2Fp683167092%2Fc6"
+```
+
+响应示例：
+
+```json
+{
+  "adamId": "...",
+  "keyUri": "...",
+  "contentKey": "...",
+  "ctx": "<base64>",
+  "state": "<base64>",
+  "rcx": "0x..",
+  "rax": "0x..",
+  "rdx": "0x..",
+  "r9": "0x..",
+  "rbp": "0x.."
+}
+```
+
+在调试版本中，该模板由 R1 入口处的 Dobby Hook 捕获：`libCoreLSKD+0x1d5709`。
+
+### 特别感谢
+
+- Anonymous，提供本项目的原始版本以及旧版 Frida 解密方法。
+- chocomint，提供 arm64 架构支持。
+
+[返回顶部](#wrapper-setup-guide--wrapper-配置教程)
