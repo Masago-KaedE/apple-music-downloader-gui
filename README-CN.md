@@ -11,7 +11,7 @@
 **必须首先安装：**
 
 - **[MP4Box](https://gpac.io/downloads/gpac-nightly-builds/)** - 确保已正确添加到环境变量
-- **[wrapper](https://github.com/WorldObservationLog/wrapper)** - 解密程序必须在使用前运行
+- **[wrapper](https://github.com/WorldObservationLog/wrapper)** - 解密程序必须在使用前运行. [Wrapper Setup](./Wrapper-SETUP.md)
 
 **可选（用于 MV 下载）：**
 

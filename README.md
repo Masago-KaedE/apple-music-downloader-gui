@@ -11,7 +11,7 @@
 **Must be installed first:**
 
 - **[MP4Box](https://gpac.io/downloads/gpac-nightly-builds/)** - Ensure it's correctly added to your environment variables
-- **[wrapper](https://github.com/WorldObservationLog/wrapper)** - Decryption program must be running before use  [Wrapper Setup](./Wrapper-SETUP.md)
+- **[wrapper](https://github.com/WorldObservationLog/wrapper)** - Decryption program must be running before use. [Wrapper Setup](./Wrapper-SETUP.md)
 
 **Optional (for MV download):**
 
