@@ -2039,6 +2039,28 @@ func main() {
 
 	args := pflag.Args()
 
+	if Config.GetAccountFromDevice {
+		resp, err := http.Get("http://" + Config.GetAccountPort)
+		if err != nil {
+			fmt.Printf("Failed to fetch account information: %v", err)
+		} else {
+			defer resp.Body.Close()
+			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+				fmt.Printf("Failed to fetch account information, HTTP status: %s\n", resp.Status)
+			} else {
+				var data map[string]string
+				if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+					fmt.Printf("Failed to decode account response: %v\n", err)
+				} else if data["music_token"] == "" {
+					fmt.Printf("No valid music_token found in the response, skipping\n")
+				} else {
+					fmt.Printf("Successfully retrieved music token\n")
+					Config.MediaUserToken = data["music_token"]
+				}
+			}
+		}
+	}
+
 	if search_type != "" {
 		if len(args) == 0 {
 			fmt.Println("Error: --search flag requires a query.")

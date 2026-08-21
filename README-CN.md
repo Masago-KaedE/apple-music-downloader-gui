@@ -43,6 +43,7 @@ template-decrypt: true
    ```bash
    go run main.go --search [song/album/artist] "search_term"
    ```
+7. **自动获取token** - 使用最新版本的 Wrapper，并将 `get-account-from-device` 设置为 `true`，即可自动获取 Token。
 
 ---
 

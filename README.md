@@ -45,6 +45,7 @@ template-decrypt: true
    ```bash
    go run main.go --search [song/album/artist] "search_term"
    ```
+7. **Auto get music token** - When using the latest version of the wrapper with `get-account-from-device` set to `true`, the token will be retrieved automatically.
 
 ---
 
