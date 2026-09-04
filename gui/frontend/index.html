@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Apple Music Downloader</title>
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="record"><span></span></div>
+          <div><strong>AM Downloader</strong><small>Windows 伴侣程序</small></div>
+        </div>
+        <nav>
+          <button class="nav active" data-page="download"><span>↓</span>下载</button>
+          <button class="nav" data-page="wrapper"><span>◎</span>Wrapper</button>
+          <button class="nav" data-page="settings"><span>⌘</span>安全设置</button>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="dot" id="project-dot"></span>
+          <div><small>项目状态</small><strong id="project-label">正在检查…</strong></div>
+        </div>
+      </aside>
+
+      <main>
+        <header>
+          <div><p class="eyebrow">APPLE MUSIC DOWNLOADER</p><h1 id="page-title">下载控制台</h1></div>
+          <button class="status-chip" id="wrapper-chip"><span class="dot"></span><span>检查 Wrapper</span></button>
+        </header>
+
+        <section class="page active" id="page-download">
+          <div class="hero-grid">
+            <article class="card input-card">
+              <div class="card-head"><div><p class="kicker">01 · 添加任务</p><h2>粘贴 Apple Music 链接</h2></div><span class="pill">串行队列</span></div>
+              <textarea id="url-input" rows="6" spellcheck="false" placeholder="每行一个歌曲、专辑或播放列表链接&#10;https://music.apple.com/us/album/..."></textarea>
+              <p class="hint">自动忽略空行和重复链接；带 <code>?i=</code> 的专辑链接按单曲处理。</p>
+            </article>
+            <article class="card quality-card">
+              <div class="card-head"><div><p class="kicker">02 · 音质</p><h2>选择输出格式</h2></div></div>
+              <div class="quality-options">
+                <button class="quality active" data-quality="alac"><strong>ALAC</strong><small>无损音频</small></button>
+                <button class="quality" data-quality="atmos"><strong>Atmos</strong><small>杜比全景声</small></button>
+                <button class="quality" data-quality="aac"><strong>AAC</strong><small>兼容与空间版本</small></button>
+              </div>
+              <div class="actions"><button class="primary" id="start-download">开始下载</button><button class="danger" id="cancel-download" disabled>取消</button></div>
+            </article>
+          </div>
+
+          <article class="card progress-card">
+            <div class="card-head"><div><p class="kicker">03 · 任务状态</p><h2 id="download-message">等待任务</h2></div><span class="pill" id="phase-label">空闲</span></div>
+            <div class="progress-track"><span id="progress-fill"></span></div>
+            <div class="metrics">
+              <div><small>队列</small><strong id="queue-metric">0 / 0</strong></div>
+              <div><small>曲目</small><strong id="track-metric">0 / 0</strong></div>
+              <div><small>完成</small><strong id="complete-metric">0</strong></div>
+              <div><small>警告</small><strong id="warning-metric">0</strong></div>
+              <div><small>错误</small><strong id="error-metric">0</strong></div>
+            </div>
+          </article>
+
+          <div class="lower-grid">
+            <article class="card log-card"><div class="card-head"><div><p class="kicker">实时日志</p><h2>运行记录</h2></div><button class="ghost" id="clear-log">清空</button></div><div id="logs" class="logs"><p class="muted">日志中的账号、Token 和验证码会自动隐藏。</p></div></article>
+            <article class="card result-card"><div class="card-head"><div><p class="kicker">本次会话</p><h2>下载结果</h2></div><button class="ghost" id="open-output">打开目录</button></div><div id="results" class="results"><p class="muted">完成的曲目会显示在这里。</p></div></article>
+          </div>
+        </section>
+
+        <section class="page" id="page-wrapper">
+          <div class="wrapper-grid">
+            <article class="card">
+              <div class="card-head"><div><p class="kicker">服务检查</p><h2>Wrapper 状态</h2></div><button class="ghost" id="refresh-wrapper">刷新</button></div>
+              <div class="ports" id="ports"></div>
+              <p class="status-copy" id="wrapper-message">正在检查四个本机端口…</p>
+            </article>
+            <article class="card login-card">
+              <div class="card-head"><div><p class="kicker">WSL 登录</p><h2>启动 Wrapper</h2></div></div>
+              <div class="warning"><strong>本机进程可见性风险</strong><p>Wrapper 会在 Linux 进程参数中保留“用户名:密码”。界面不会保存或记录凭据，但具有本机进程查看权限的软件可能看到它。</p></div>
+              <label>WSL 发行版<select id="distro-select"><option>Ubuntu</option></select></label>
+              <label>Apple ID<input id="apple-id" autocomplete="off" spellcheck="false" /></label>
+              <label>密码<input id="apple-password" type="password" autocomplete="new-password" /></label>
+              <label class="check"><input type="checkbox" id="risk-confirm" /><span>我理解上述风险，并仅在受信任的电脑上继续</span></label>
+              <div class="actions"><button class="primary" id="start-wrapper">登录并启动</button><button class="ghost" id="open-terminal">打开外部终端</button><button class="danger" id="stop-wrapper">停止</button></div>
+              <div class="twofactor hidden" id="twofactor"><label>双重认证验证码<input id="twofactor-code" type="password" inputmode="numeric" maxlength="8" autocomplete="one-time-code" /></label><button class="primary" id="submit-twofactor">提交验证码</button></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="page-settings">
+          <article class="card settings-card">
+            <div class="card-head"><div><p class="kicker">白名单配置</p><h2>安全设置</h2></div><span class="pill">不读取 Token</span></div>
+            <div class="form-grid">
+              <label class="wide">项目目录<div class="input-action"><input id="project-root" /><button class="ghost" id="browse-project">浏览</button></div></label>
+              <label>Storefront<input id="storefront" maxlength="2" /></label>
+              <label>AAC 类型<select id="aac-type"><option value="aac-lc">AAC-LC</option><option value="aac">AAC</option><option value="aac-binaural">AAC Binaural</option><option value="aac-downmix">AAC Downmix</option></select></label>
+              <label>ALAC 上限<select id="alac-max"><option value="192000">192 kHz</option><option value="96000">96 kHz</option><option value="48000">48 kHz</option><option value="44100">44.1 kHz</option></select></label>
+              <label>Atmos 上限<select id="atmos-max"><option value="2768">2768</option><option value="2448">2448</option></select></label>
+              <label class="wide">ALAC 输出目录<input id="alac-folder" /></label>
+              <label class="wide">Atmos 输出目录<input id="atmos-folder" /></label>
+              <label class="wide">AAC 输出目录<input id="aac-folder" /></label>
+              <label>封面尺寸<input id="cover-size" placeholder="5000x5000" /></label>
+              <label>封面格式<select id="cover-format"><option value="jpg">JPG</option><option value="png">PNG</option><option value="original">Original</option></select></label>
+              <label>歌词格式<select id="lyrics-format"><option value="lrc">LRC</option><option value="ttml">TTML</option></select></label>
+              <div class="checks"><label class="check"><input id="embed-cover" type="checkbox" /><span>嵌入封面</span></label><label class="check"><input id="embed-lyrics" type="checkbox" /><span>嵌入歌词</span></label><label class="check"><input id="save-lyrics" type="checkbox" /><span>另存歌词文件</span></label></div>
+            </div>
+            <div class="settings-foot"><p>代理、Token、Wrapper 端口、删除和转换选项不会出现在此界面。</p><button class="primary" id="save-settings">保存安全设置</button></div>
+          </article>
+        </section>
+      </main>
+      <div id="toast" class="toast"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

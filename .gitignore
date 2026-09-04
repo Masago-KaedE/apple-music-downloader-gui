@@ -1,15 +1,38 @@
+# This checkout intentionally uses an allowlist so local credentials, runtime
+# dependencies, downloads, and generated binaries are excluded by default.
 *
 !.gitignore
 !.gitattributes
 !.dockerignore
+!/.github/
+!/.github/**
 !/config.yaml.example
 !/agent.js
 !/agent-arm64.js
 !/go.mod
 !/go.sum
 !/main.go
+!/runtime_options.go
+!/runtime_options_test.go
 !/*.md
 !/utils/
 !/utils/**
 !/cmd/
 !/cmd/**
+!/gui/
+!/gui/**
+
+# Sensitive and machine-local files. Keep these explicit even though the
+# allowlist above already ignores them.
+/.env
+/.env.*
+/config.yaml
+/wrapper-runtime/
+/AM-DL downloads/
+/AM-DL-Atmos downloads/
+/apple-music-downloader.exe
+/gui/build/bin/
+/gui/frontend/node_modules/
+/gui/frontend/dist/
+/gui/frontend/wailsjs/
+/gui/wailsjs/

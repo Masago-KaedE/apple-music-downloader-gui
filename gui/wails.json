@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Apple Music Downloader GUI",
+  "outputfilename": "AppleMusicDownloaderGUI",
+  "frontend:install": "npm ci --ignore-scripts --no-audit --no-fund",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "wailsjsdir": "wailsjs",
+  "version": "2",
+  "info": {
+    "companyName": "Apple Music Downloader Community",
+    "productName": "Apple Music Downloader GUI",
+    "productVersion": "1.0.0",
+    "copyright": "Community companion application",
+    "comments": "Windows GUI companion for the existing Apple Music Downloader installation"
+  },
+  "nsisType": "multiple",
+  "obfuscated": false
+}
