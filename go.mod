@@ -1,4 +1,4 @@
-module main
+module github.com/zhaarey/apple-music-downloader
 
 go 1.23.1
 

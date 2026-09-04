@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"main/utils/httputil"
+	"github.com/zhaarey/apple-music-downloader/utils/httputil"
 )
 
 // SearchResp represents the top-level response from the search API.

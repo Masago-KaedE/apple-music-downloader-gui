@@ -1,7 +1,7 @@
 package task
 
 import (
-	"main/utils/ampapi"
+	"github.com/zhaarey/apple-music-downloader/utils/ampapi"
 )
 
 type Track struct {

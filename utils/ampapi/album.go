@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"main/utils/httputil"
+	"github.com/zhaarey/apple-music-downloader/utils/httputil"
 )
 
 func GetAlbumResp(storefront string, id string, language string, token string) (*AlbumResp, error) {

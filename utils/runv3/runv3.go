@@ -9,8 +9,8 @@ import (
 	"github.com/go-resty/resty/v2"
 	"google.golang.org/protobuf/proto"
 
-	cdm "main/utils/runv3/cdm"
-	key "main/utils/runv3/key"
+	cdm "github.com/zhaarey/apple-music-downloader/utils/runv3/cdm"
+	key "github.com/zhaarey/apple-music-downloader/utils/runv3/key"
 	"os"
 
 	"bytes"
@@ -28,7 +28,7 @@ import (
 	"github.com/grafov/m3u8"
 	"github.com/schollz/progressbar/v3"
 
-	"main/utils/httputil"
+	"github.com/zhaarey/apple-music-downloader/utils/httputil"
 )
 
 type PlaybackLicense struct {

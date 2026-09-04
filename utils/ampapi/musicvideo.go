@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"main/utils/httputil"
+	"github.com/zhaarey/apple-music-downloader/utils/httputil"
 )
 
 func GetMusicVideoResp(storefront string, id string, language string, token string) (*MusicVideoResp, error) {

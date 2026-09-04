@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	"main/utils/httputil"
+	"github.com/zhaarey/apple-music-downloader/utils/httputil"
 )
 
 type SongLyrics struct {

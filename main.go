@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,15 +19,15 @@ import (
 	"strings"
 	"time"
 
-	"main/utils/alacfix"
-	"main/utils/ampapi"
-	"main/utils/httputil"
-	"main/utils/lyrics"
-	"main/utils/runv2"
-	"main/utils/runv3"
-	"main/utils/runv4"
-	"main/utils/structs"
-	"main/utils/task"
+	"github.com/zhaarey/apple-music-downloader/utils/alacfix"
+	"github.com/zhaarey/apple-music-downloader/utils/ampapi"
+	"github.com/zhaarey/apple-music-downloader/utils/httputil"
+	"github.com/zhaarey/apple-music-downloader/utils/lyrics"
+	"github.com/zhaarey/apple-music-downloader/utils/runv2"
+	"github.com/zhaarey/apple-music-downloader/utils/runv3"
+	"github.com/zhaarey/apple-music-downloader/utils/runv4"
+	"github.com/zhaarey/apple-music-downloader/utils/structs"
+	"github.com/zhaarey/apple-music-downloader/utils/task"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
@@ -69,16 +68,19 @@ type AddedTrack struct {
 	Song     string `json:"song"`
 }
 
-func loadConfig() error {
-	const (
-		configPath  = "config.yaml"
-		examplePath = "config.yaml.example"
-	)
+func loadConfig(configPath string) error {
+	const examplePath = "config.yaml.example"
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("read %s: %w", configPath, err)
+		}
+		if filepath.Clean(configPath) != filepath.Clean("config.yaml") {
+			return fmt.Errorf("read %s: file does not exist", configPath)
 		}
 
 		// Create config.yaml from config.yaml.example.
@@ -837,8 +839,29 @@ func convertIfNeeded(track *task.Track) {
 
 func ripTrack(track *task.Track, token string, mediaUserToken string) {
 	var err error
+	beforeSuccess := counter.Success
+	beforeError := counter.Error
+	beforeWarning := counter.Unavailable + counter.NotSong
+	beforeAdded := len(AddedTracks)
+	emitMachineEvent("track_started", map[string]any{
+		"id": track.ID, "index": track.TaskNum, "total": track.TaskTotal,
+		"song": track.Resp.Attributes.Name, "artist": track.Resp.Attributes.ArtistName,
+	})
+	defer func() {
+		switch {
+		case len(AddedTracks) > beforeAdded:
+			emitMachineEvent("track_completed", AddedTracks[len(AddedTracks)-1])
+		case counter.Error > beforeError:
+			emitMachineEvent("error", map[string]any{"code": "track_failed", "song": track.Resp.Attributes.Name})
+		case counter.Unavailable+counter.NotSong > beforeWarning:
+			emitMachineEvent("warning", map[string]any{"code": "track_unavailable", "song": track.Resp.Attributes.Name})
+		case counter.Success > beforeSuccess:
+			emitMachineEvent("track_completed", map[string]any{"song": track.Resp.Attributes.Name, "artist": track.Resp.Attributes.ArtistName})
+		}
+	}()
 	counter.Total++
 	fmt.Printf("Track %d of %d: %s\n", track.TaskNum, track.TaskTotal, track.Type)
+	emitMachineEvent("phase", map[string]any{"name": "preparing", "song": track.Resp.Attributes.Name})
 
 	//mv dl dev
 	if track.Type == "music-videos" {
@@ -959,6 +982,7 @@ func ripTrack(track *task.Track, token string, mediaUserToken string) {
 	}
 	if existsOriginal {
 		fmt.Println("Track already exists locally.")
+		emitMachineEvent("phase", map[string]any{"name": "existing", "song": track.Resp.Attributes.Name})
 		counter.Success++
 		okDict[track.PreID] = append(okDict[track.PreID], track.TaskNum)
 
@@ -979,6 +1003,7 @@ func ripTrack(track *task.Track, token string, mediaUserToken string) {
 		existsConverted, err2 := fileExists(convertedPath)
 		if err2 == nil && existsConverted {
 			fmt.Println("Converted track already exists locally.")
+			emitMachineEvent("phase", map[string]any{"name": "existing", "song": track.Resp.Attributes.Name})
 			counter.Success++
 			okDict[track.PreID] = append(okDict[track.PreID], track.TaskNum)
 
@@ -1003,6 +1028,7 @@ func ripTrack(track *task.Track, token string, mediaUserToken string) {
 	}
 
 	//get lrc
+	emitMachineEvent("phase", map[string]any{"name": "metadata", "song": track.Resp.Attributes.Name})
 	var lrc string = ""
 	if Config.EmbedLrc || Config.SaveLrcFile {
 		lrcStr, err := lyrics.Get(track.Storefront, track.ID, Config.LrcType, Config.Language, Config.LrcFormat, token, mediaUserToken)
@@ -1022,6 +1048,7 @@ func ripTrack(track *task.Track, token string, mediaUserToken string) {
 	}
 
 	if needDlAacLc {
+		emitMachineEvent("phase", map[string]any{"name": "downloading", "song": track.Resp.Attributes.Name})
 		if len(mediaUserToken) <= 50 {
 			fmt.Println("Invalid media-user-token")
 			counter.Error++
@@ -1038,6 +1065,7 @@ func ripTrack(track *task.Track, token string, mediaUserToken string) {
 			return
 		}
 	} else {
+		emitMachineEvent("phase", map[string]any{"name": "downloading", "song": track.Resp.Attributes.Name})
 		trackM3u8Url, _, err := extractMedia(track.M3u8, false)
 		if err != nil {
 			fmt.Println("\u26A0 Failed to extract info from manifest:", err)
@@ -1066,6 +1094,7 @@ func ripTrack(track *task.Track, token string, mediaUserToken string) {
 
 	}
 	//这里利用MP4box将fmp4转化为mp4，并添加ilst box与cover，方便后面的mp4tag添加更多自定义标签
+	emitMachineEvent("phase", map[string]any{"name": "tagging", "song": track.Resp.Attributes.Name})
 	tags := []string{
 		"tool=",
 		"artist=AppleMusic",
@@ -1989,25 +2018,23 @@ func writeMP4Tags(track *task.Track, lrc string) error {
 }
 
 func main() {
-	err := loadConfig()
+	os.Exit(run())
+}
+
+func run() int {
+	configPath := preparseFlagValue(os.Args[1:], "config", "config.yaml")
+	err := loadConfig(configPath)
 	if err != nil {
 		fmt.Printf("load Config failed: %v", err)
-		return
-	}
-	if err := httputil.Init(Config.Proxy); err != nil {
-		fmt.Printf("proxy config error: %v\n", err)
-		return
-	}
-	token, err := ampapi.GetToken()
-	if err != nil {
-		if Config.AuthorizationToken != "" && Config.AuthorizationToken != "your-authorization-token" {
-			token = strings.Replace(Config.AuthorizationToken, "Bearer ", "", -1)
-		} else {
-			fmt.Println("Failed to get token.")
-			return
-		}
+		return exitInvalidInput
 	}
 	var search_type string
+	var parsedConfigPath string
+	var safeOverridesPath string
+	pflag.StringVar(&parsedConfigPath, "config", configPath, "Path to config YAML")
+	pflag.StringVar(&safeOverridesPath, "safe-overrides", "", "Path to a GUI-safe JSON settings overlay")
+	pflag.BoolVar(&machine_events, "machine-events", false, "Emit prefixed JSON lifecycle events")
+	pflag.BoolVar(&non_interactive, "non-interactive", false, "Exit on errors instead of prompting")
 	pflag.StringVar(&search_type, "search", "", "Search for 'album', 'song', or 'artist'. Provide query after flags.")
 	pflag.BoolVar(&dl_atmos, "atmos", false, "Enable atmos download mode")
 	pflag.BoolVar(&dl_aac, "aac", false, "Enable adm-aac download mode")
@@ -2030,14 +2057,55 @@ func main() {
 		pflag.PrintDefaults()
 	}
 
+	if hasFlagArg(os.Args[1:], "help", "h") {
+		pflag.Usage()
+		return exitOK
+	}
 	pflag.Parse()
-	Config.AlacMax = *alac_max
-	Config.AtmosMax = *atmos_max
-	Config.AacType = *aac_type
-	Config.MVAudioType = *mv_audio_type
-	Config.MVMax = *mv_max
+	if filepath.Clean(parsedConfigPath) != filepath.Clean(configPath) {
+		fmt.Println("Error: --config must be available before configuration is loaded.")
+		emitMachineEvent("error", map[string]any{"code": "config_path_mismatch", "message": "config path changed during parsing"})
+		return exitInvalidInput
+	}
+	if safeOverridesPath != "" {
+		if err := applySafeOverrides(safeOverridesPath); err != nil {
+			fmt.Printf("safe overrides failed: %v\n", err)
+			emitMachineEvent("error", map[string]any{"code": "invalid_safe_overrides", "message": err.Error()})
+			return exitInvalidInput
+		}
+	}
+	if pflag.Lookup("alac-max").Changed {
+		Config.AlacMax = *alac_max
+	}
+	if pflag.Lookup("atmos-max").Changed {
+		Config.AtmosMax = *atmos_max
+	}
+	if pflag.Lookup("aac-type").Changed {
+		Config.AacType = *aac_type
+	}
+	if pflag.Lookup("mv-audio-type").Changed {
+		Config.MVAudioType = *mv_audio_type
+	}
+	if pflag.Lookup("mv-max").Changed {
+		Config.MVMax = *mv_max
+	}
 
 	args := pflag.Args()
+	if err := httputil.Init(Config.Proxy); err != nil {
+		fmt.Printf("proxy config error: %v\n", err)
+		emitMachineEvent("error", map[string]any{"code": "proxy_config", "message": err.Error()})
+		return exitInvalidInput
+	}
+	token, err := ampapi.GetToken()
+	if err != nil {
+		if Config.AuthorizationToken != "" && Config.AuthorizationToken != "your-authorization-token" {
+			token = strings.Replace(Config.AuthorizationToken, "Bearer ", "", -1)
+		} else {
+			fmt.Println("Failed to get token.")
+			emitMachineEvent("error", map[string]any{"code": "token_unavailable", "message": "failed to get authorization token"})
+			return exitDownloadFailed
+		}
+	}
 
 	if Config.GetAccountFromDevice {
 		resp, err := http.Get("http://" + Config.GetAccountPort)
@@ -2065,23 +2133,23 @@ func main() {
 		if len(args) == 0 {
 			fmt.Println("Error: --search flag requires a query.")
 			pflag.Usage()
-			return
+			return exitInvalidInput
 		}
 		selectedUrl, err := handleSearch(search_type, args, token)
 		if err != nil {
 			fmt.Printf("\nSearch process failed: %v\n", err)
-			return
+			return exitDownloadFailed
 		}
 		if selectedUrl == "" {
 			fmt.Println("\nExiting.")
-			return
+			return exitOK
 		}
 		os.Args = []string{selectedUrl}
 	} else {
 		if len(args) == 0 {
 			fmt.Println("No URLs provided. Please provide at least one URL.")
 			pflag.Usage()
-			return
+			return exitInvalidInput
 		}
 		os.Args = args
 	}
@@ -2090,7 +2158,7 @@ func main() {
 		urlArtistName, urlArtistID, err := getUrlArtistName(os.Args[0], token)
 		if err != nil {
 			fmt.Println("Failed to get artistname.")
-			return
+			return exitDownloadFailed
 		}
 		Config.ArtistFolderFormat = strings.NewReplacer(
 			"{UrlArtistName}", LimitString(urlArtistName),
@@ -2099,7 +2167,7 @@ func main() {
 		albumArgs, err := checkArtist(os.Args[0], token, "albums")
 		if err != nil {
 			fmt.Println("Failed to get artist albums.")
-			return
+			return exitDownloadFailed
 		}
 		mvArgs, err := checkArtist(os.Args[0], token, "music-videos")
 		if err != nil {
@@ -2108,8 +2176,11 @@ func main() {
 		os.Args = append(albumArgs, mvArgs...)
 	}
 	albumTotal := len(os.Args)
+	startMachineJob(os.Args)
+	exitCode := exitOK
 	for {
 		for albumNum, urlRaw := range os.Args {
+			emitMachineEvent("queue_item_started", map[string]any{"index": albumNum + 1, "total": albumTotal, "url": urlRaw})
 			fmt.Printf("Queue %d of %d: ", albumNum+1, albumTotal)
 			var storefront, albumId string
 
@@ -2164,7 +2235,10 @@ func main() {
 			}
 			parse, err := url.Parse(urlRaw)
 			if err != nil {
-				log.Fatalf("Invalid URL: %v", err)
+				fmt.Printf("Invalid URL: %v\n", err)
+				counter.Error++
+				emitMachineEvent("error", map[string]any{"code": "invalid_url", "message": err.Error()})
+				continue
 			}
 			var urlArg_i = parse.Query().Get("i")
 
@@ -2200,9 +2274,10 @@ func main() {
 		fmt.Printf("=======  [\u2714 ] Completed: %d/%d  |  [\u26A0 ] Warnings: %d  |  [\u2716 ] Errors: %d  =======\n", counter.Success, counter.Total, counter.Unavailable+counter.NotSong, counter.Error)
 		if counter.Error == 0 {
 			break
-		} else if Config.ExitOnError {
+		} else if Config.ExitOnError || non_interactive {
 			fmt.Println("Error detected, exiting...")
-			os.Exit(1)
+			exitCode = exitDownloadFailed
+			break
 		} else {
 			fmt.Println("Error detected, press Enter to try again...")
 			fmt.Scanln()
@@ -2221,6 +2296,15 @@ func main() {
 			fmt.Println(string(jsonOutput))
 		}
 	}
+	emitMachineEvent("job_finished", map[string]any{
+		"completed": counter.Success,
+		"total":     counter.Total,
+		"warnings":  counter.Unavailable + counter.NotSong,
+		"errors":    counter.Error,
+		"tracks":    AddedTracks,
+		"exitCode":  exitCode,
+	})
+	return exitCode
 }
 
 func mvDownloader(adamID string, saveDir string, token string, storefront string, mediaUserToken string, track *task.Track) error {

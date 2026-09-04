@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"regexp"
 
-	"main/utils/httputil"
+	"github.com/zhaarey/apple-music-downloader/utils/httputil"
 )
 
 func GetToken() (string, error) {

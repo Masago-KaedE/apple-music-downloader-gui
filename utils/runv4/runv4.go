@@ -14,7 +14,7 @@ import (
 	"sync"
 	"golang.org/x/sync/errgroup"
 
-	"main/utils/structs"
+	"github.com/zhaarey/apple-music-downloader/utils/structs"
 
 	"github.com/grafov/m3u8"
 	"github.com/itouakirai/mp4ff/mp4"
