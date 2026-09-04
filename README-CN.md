@@ -6,6 +6,19 @@
 
 ---
 
+## 🪟 Windows 图形界面
+
+本 Fork 在保留原命令行用法的基础上，新增了独立的 Wails Windows 桌面伴侣程序，源码位于 [`gui/`](./gui/)。它提供中文下载队列、ALAC/Atmos/AAC 选择、Wrapper 状态与登录、阶段进度、日志脱敏、取消和结果列表。
+
+- GUI 默认绑定现有下载器目录，不复制 `config.yaml` 或下载核心。
+- Apple ID、密码、2FA 和 Token 不写入 GUI 设置或日志；Wrapper 自身仍可能在 Linux 进程参数中暴露 `用户名:密码`，登录前会显示警告。
+- GUI 仅停止由当前 GUI 会话启动的 Wrapper，并通过 Windows Job Object 清理下载子进程。
+- 安装包、可执行文件、真实配置、Wrapper 和下载内容不会提交到源码仓库。
+
+Windows 构建要求和可复现命令见 [`gui/README.md`](./gui/README.md)。GUI 仅用于用户具有有效订阅和访问权的内容。
+
+---
+
 ## ⚠️ 前置要求
 
 **必须首先安装：**

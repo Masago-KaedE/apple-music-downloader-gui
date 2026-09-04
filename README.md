@@ -6,6 +6,19 @@
 
 ---
 
+## 🪟 Windows GUI
+
+This fork preserves the existing CLI and adds a standalone Wails desktop companion under [`gui/`](./gui/). It provides a Chinese download queue, ALAC/Atmos/AAC selection, Wrapper status and login, phase progress, redacted logs, cancellation, and session results.
+
+- The GUI binds to an existing downloader directory; it does not copy `config.yaml` or the download engine.
+- Apple ID, password, 2FA codes, and tokens are not written to GUI settings or logs. Wrapper itself may still expose `username:password` in Linux process arguments, so the UI warns before login.
+- The GUI stops only a Wrapper process it started and uses a Windows Job Object to clean up downloader child processes.
+- Installers, executables, real configuration, Wrapper binaries, and downloaded media are excluded from source control.
+
+See [`gui/README.md`](./gui/README.md) for pinned Windows build requirements and reproducible commands. Use the GUI only for content covered by a valid subscription and access rights.
+
+---
+
 ## ⚠️ Prerequisites
 
 **Must be installed first:**
