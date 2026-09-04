@@ -2,6 +2,8 @@
 
 [English](./README.md) | [简体中文](./README-CN.md) | [🌐 Cloud Server / Proxy Setup](./PROXY-SETUP.md)
 
+> **Upstream project:** [zhaarey/apple-music-downloader](https://github.com/zhaarey/apple-music-downloader)
+>
 > **Original script by Sorrow.** Modified with fixes and improvements.
 
 ---

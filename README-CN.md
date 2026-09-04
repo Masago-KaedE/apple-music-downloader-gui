@@ -2,6 +2,8 @@
 
 [English](./README.md) | [简体中文](./README-CN.md) | [🌐 云服务器/代理配置](./PROXY-SETUP.md)
 
+> **上游项目：** [zhaarey/apple-music-downloader](https://github.com/zhaarey/apple-music-downloader)
+>
 > **原脚本由 Sorrow 编写。** 本仓库已作修改，包含一些修复和改进。
 
 ---
